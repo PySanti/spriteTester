@@ -6,6 +6,13 @@ from os import DirEntry, system as terminal
 from sys import argv
 pygame.init()
 
+#    Cosas por hacer:
+#        Quitar comandos, agregar modificacion directa
+#        Revisar fugas y documentaciones post refactor
+#        testear bien bien el programa (probar cada parte del programa)
+
+
+
 def isAnimationPath(animation_path):
     """
         Retorna True en caso de que la ruta de la animacion sea un directorio y tenga unicamente archivos con extension 
