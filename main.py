@@ -1,3 +1,4 @@
+from types import resolve_bases
 import pygame
 from pygame.locals import *
 import os
@@ -23,6 +24,9 @@ def isAnimationPath(animation_path):
                 return False
     return True
 def getAnimationSpriteNumber(sprite_name):
+    """
+        Retorna el numero de identificacion del sprite en la animacion. Necesario para el ordenado almacenamiento de los sprites
+    """
     start_index = None
     end_index   = None
     for letter in sprite_name:
@@ -45,6 +49,9 @@ def getAnimationSpriteNumber(sprite_name):
     elif (start_index != None ) and (end_index != None):
         return int(sprite_name[start_index:end_index])
 def getImageReady(path, size, colorkey, has_alpha_pixels):
+    """
+        Carga la imagen de "path" y le asigna las caracteristicas pasadas por parametro
+    """
     image = pygame.image.load(path)
     image = pygame.transform.scale(image, size)
 
@@ -78,7 +85,10 @@ def getAnimationSprites(animation_data):
         else:
             current_index += 1
     return animationList
-def refreshTerminalData(command_word, animation_data, input, current_advertencia, current_changing_feature, last_input, current_last_comand):
+def refreshTerminalData(command_word, animation_data, input_manager):
+    """
+        Actualiza la informacion de la terminal, con las instrucciones, el historial y la entrada
+    """
     terminal("clear")
     print(f"""   \n\n\t\tUso de comandos: {command_word} (caracteristica)   \n\t\tCaracteristicas disponibles: \n""")
     for key,value in animation_data.items():
@@ -86,35 +96,35 @@ def refreshTerminalData(command_word, animation_data, input, current_advertencia
             print(f"\t\t ~ {key:30} :    {value}")
 
     print("\n\n\n\n\t\t Historial de comandos :\n")
-    if (len(last_input) > 0):
-        for command in last_input:
-            print(f"\t\t -> {command}" if last_input.index(command) == current_last_comand else f"\t\t  {command}")
+    if (len(input_manager.historial) > 0):
+        for command in input_manager.historial:
+            print(f"\t\t -> {command}" if input_manager.historial.index(command) == input_manager.current_historial_index else f"\t\t  {command}")
 
 
     print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n")
-    if current_advertencia != None:
-        print(f"\t{current_advertencia}")
-    if current_changing_feature != None:
-        print(f"\t{current_changing_feature} : {input}")
+    if input_manager.current_advertencia != None:
+        print(f"\t{input_manager.current_advertencia}")
+    if input_manager.current_feature != None:
+        print(f"\t~ {input_manager.current_feature} : {input_manager.data}")
     else:
-        print(f"\t-> {input}")
+        print(f"\t-> {input_manager.data}")
 def numberList(sep, tested_str, number_count):
     """
-        Funcion creada para testear cadenas del formato: numero(separador)numero(separador)
+        Funcion creada para testear cadenas del formato: numero(separador)numero(separador)...
         
         En caso de que "tested_str" cumpla con el formato, la funcion retornara una lista con los numeros, en caso contrario, retornara False
     """
-    new_feature = tested_str.split(sep)
-    if len(new_feature) != number_count:
+    number_list = tested_str.split(sep)
+    if len(number_list) != number_count:
         return False
     else:
         try:
             for i in range(0, number_count):
-                new_feature[i] = int(new_feature[i])
+                number_list[i] = int(number_list[i])
         except:
             return False
         else:
-            return new_feature
+            return number_list
 def isCommand(tested_command, command_word, animation_data):
     """
         Retorna la "feature" del comando en caso de que el comando sea valido, False en caso contrario ... 
@@ -129,189 +139,261 @@ def isCommand(tested_command, command_word, animation_data):
             return feature
     else:
         return False
-def moveCurrentHistorialElement(historial, current_index, direction):
-    if direction == "left":
-        current_index -= 1
-        if current_index < 0:
-            current_index = len(historial) - 1
-    else:
-        current_index += 1
-        if current_index > (len(historial) - 1):
-            current_index = 0
-    return current_index
-ANIMATION_DATA = {
-        "animation path" : "test/megaman/shooting_running_right/",
-        "size" : [130,100],
-        "has_alpha_pixels" : True,
-        "colorkey" : None,
-        "fps" : 6,
-        "background color" : (0,0,0)
-}
-
-terminal("clear")
-if len(argv) != 2:
-    print("\n\tError, se debe pasar por la entrada del programa la ruta de la carpeta de animacion ... \n\t\t\t\t\t\t\t\t Ex: python3 main.py ../Desktop/AnimationFolder")
-    quit(-1)
-else:
-    if (not isAnimationPath(argv[1])) and (argv[1] != "-p"):
-        print("Error, la carpeta de animacion debe tener unicamente archivos con extension '.jpg' o '.png'")
+def argvTesting(argv):
+    """
+        Comprueba la validez del argumento pasado por la entrada al programa
+    """
+    terminal("clear")
+    if len(argv) != 2:
+        print("\n\tError, se debe pasar por la entrada del programa la ruta de la carpeta de animacion ... \n\t\t\t\t\t\t\t\t Ex: python3 main.py ../Desktop/AnimationFolder")
         quit(-1)
-    elif argv[1] != "-p":
-        ANIMATION_DATA["animation path"] = argv[1]
+    else:
+        if (not isAnimationPath(argv[1])) and (argv[1] != "-p"):
+            print("Error, la carpeta de animacion debe tener unicamente archivos con extension '.jpg' o '.png'")
+            quit(-1)
+        elif argv[1] != "-p":
+            ANIMATION_DATA["animation path"] = argv[1]
 
+class AnimationManager:
+    """
+        Clase creada para la administracion de las animaciones
+    """
+    def __init__(self,animation_data):
+        self.current_index      = 0
+        self.current_frame      = 0
+        self.frames_per_image   = animation_data["fps"]
+        self.animation_list     =   getAnimationSprites(animation_data)
+    def currentSprite(self):
+        """
+            Retorna el sprite actual de la animacion
+        """
+        return self.animation_list[self.current_index]
+    def update(self):
+        """
+            Actualiza los valores de la animacion
+        """
+        if self.current_frame == self.frames_per_image:
+            self.current_frame = 0
+            self.current_index += 1
+            if self.current_index > (len(self.animation_list) - 1) :
+                self.current_index = 0
+        else:
+            self.current_frame += 1
+    def resetData(self, animation_data):
+        """
+            Vuelve a solicitar la lista de sprites a la funcion "getAnimationSprites", ademas resetea los valores de la animacion
+        """
+        self.__init__(animation_data)
 
-WINDOW_SIZE             =   [1000, 800]
-WINDOW                  =   pygame.display.set_mode(WINDOW_SIZE, RESIZABLE)
-EXIT                    =   False
-CLOCK                   =   pygame.time.Clock()
-ANIMATION_LIST          =   getAnimationSprites(ANIMATION_DATA)
-CURRENT_FRAME           =   0
-CURRENT_INDEX           =   0
-INPUT                   =   ""
-CHANGING_FEATURE        =   None
-BACKSPACE_PRESSED       =   False
-CURRENT_BACKSPACE_FRAME =   0
-BACKSPACE_FPS           =   5
-CURRENT_ADVERTENCIA     =   None
-LAST_INPUT              =   []
-COMMAND_WORD            =   "cambiar "
-CURRENT_REUSE_COMMAND_INDEX   =   0
-HISTORIAL_COMMANDS      =   {"right" : K_DOWN, "left" : K_UP, "remove" : K_DELETE} # right para aumentar el indice y left para disminuirlo
+class InputManager:
+    def __init__(self):
+        self.data = ""
+        self.remove_frame = 0
+        self.remove_count_limit = 5
+        self.backspace_pressed  =  False
+        self.current_advertencia = None
+        # pueden haber dos tipos de entrada : 
+        #                                              1- "command input" 
+        #                                              2- "feature value input"
+        self.current_input_type = 1
+        self.current_feature    = None
+        self.historial          = []
+        self.current_historial_index = 0
+    def add(self, letter):
+        """
+            Agrega la letra pasada por parametro a la entrada
+        """
+        self.data += letter
+    def animationPathInput(self, animation_data, animation_manager):
+        if isAnimationPath(self.data):
+            if animation_data["animation path"] != self.data:
+                animation_data["animation path"]            = self.data
+                self.current_advertencia                    = "Exito !"
+                animation_manager.resetData(animation_data)
+            else:
+                self.current_advertencia                 = "No hay cambios !"
+        else:
+            self.current_advertencia = f"Error, el animation path debe ser un directorio en el que todos los elementos sean archivos con extension '.jpg' o '.png' ..."
+    def sizeInput(self, animation_data, animation_manager):
+        new_size = numberList(",", self.data, 2)
+        if not new_size:                          
+            self.current_advertencia = f"Error, el valor '{self.data}' para la caracteristica 'size' es invalido. El formato debe ser: x,y"
+        else:
+            if new_size != animation_data["size"]:
+                animation_data["size"]       = new_size
+                self.current_advertencia     = "Exito !"
+                animation_manager.resetData(animation_data)
+            else:
+                self.current_advertencia                 = "No hay cambios !"
+    def colorkeyInput(self, animation_data, animation_manager):
+        new_colorkey = numberList(",", self.data, 3)
+        if not new_colorkey:                          
+            if self.data == "None":
+                if animation_data["colorkey"] != None:
+                    animation_data["colorkey"]          = None
+                    animation_data["has_alpha_pixels"]  = True
+                    animation_manager.resetData(animation_data)
+                    self.current_advertencia                 = "Exito !"
+                else:
+                    self.current_advertencia                 = "No hay cambios !"
+            else:
+                self.current_advertencia = f"Error, el valor '{self.data}' para la caracteristica 'colorkey' es invalido. El formato debe ser: x,y,z. Tambien puede usarse el valor 'None'"
+        else:
+            if new_colorkey != animation_data["colorkey"]:
+                animation_data["colorkey"]               = new_colorkey
+                animation_data["has_alpha_pixels"]       = False
+                animation_manager.resetData(animation_data)
+                self.current_advertencia                 = "Exito !"
+            else:
+                self.current_advertencia = "No hay cambios !"
+    def fpsInput(self, animation_data, animation_manager):
+        new_fps = None
+        try:
+            new_fps = int(self.data)
+        except:
+            self.current_advertencia = f"Error, el valor para fps '{self.data}' es invalido. El valor debe ser numerico ..."
+        else:
+            if new_fps != animation_data["fps"]:
+                animation_data["fps"]               = new_fps
+                animation_manager.current_frame     = animation_manager.current_index = 0
+                animation_manager.frames_per_image  = new_fps
+                self.current_advertencia     = "Exito !"
+            else:
+                self.current_advertencia = "No hay cambios !"
+    def backgroundColorInput(self, animation_data):
+        new_bc = numberList(",", self.data, 3)
+        if not new_bc :
+            self.current_advertencia = f"Error, el valor '{self.data}' para la caracteristica 'background color' es invalido. El formato debe ser: x,y,z"
+        else:
+            animation_data["background color"]  = new_bc
+            self.current_advertencia                 = "Exito !"
+    def commandInput(self, command_word, animation_data):
+        feature = isCommand(self.data, command_word, animation_data)
+        if feature:
+            self.current_feature = feature
+            self.current_input_type = 2
+        else:
+            self.current_advertencia = f"Error, comando invalido. Revisar guia"
+    def enter(self, command_word, animation_data, animation_manager):
+        if self.current_input_type == 1:
+            self.commandInput(command_word, animation_data)
+        else:
+            if   self.current_feature == "animation path":
+                self.animationPathInput(animation_data, animation_manager)
+            elif self.current_feature == "size":
+                self.sizeInput(animation_data, animation_manager)
+            elif self.current_feature == "colorkey":
+                self.colorkeyInput(animation_data, animation_manager)
+            elif self.current_feature == "fps":
+                self.fpsInput(animation_data)
+            elif self.current_feature == "background color":
+                self.backgroundColorInput(animation_data)
+            self.current_feature = None
+            self.current_input_type  = 1
+        if not self.data in self.historial:
+            self.historial.append(self.data[:])
+        self.reset()
+    def updateBackspace(self):
+        """
+            Actualiza el valor del frame del backspace, recordar que el backspace debe tener un contador de accion (de modo que el backspace no tenga
+            efecto hasta despues de cierto tiempo) dada la rapidez con la que suceden las iteaciones. Tambien para que el usuario puede eliminar
+            de manera continua sin soltar el backspace.
 
-refreshTerminalData(COMMAND_WORD, ANIMATION_DATA, INPUT, CURRENT_ADVERTENCIA, CHANGING_FEATURE, LAST_INPUT, CURRENT_REUSE_COMMAND_INDEX)
+            El metodo retorna True en caso de que se haya eliminado realmente la ultima letra de la lista, False en caso contrario
+        """
+        if self.backspace_pressed:
+            if self.remove_frame ==  self.remove_count_limit:
+                self.remove_frame = 0
+                self.data = self.data[:len(self.data)-1]
+                return True
+            else:
+                self.remove_frame += 1
+                return False
+        else:
+            self.remove_frame = self.remove_count_limit
+            return False
+    def reset(self):
+        """
+            Limpia el valor de la entrada
+        """
+        self.data = ""
+    def updateHistorial(self, direction):
+        if len(self.historial) > 0:
+            if direction == "left":
+                self.current_historial_index -= 1
+                if self.current_historial_index < 0:
+                    self.current_historial_index = len(self.historial) - 1
+            else:
+                self.current_historial_index += 1
+                if self.current_historial_index > (len(self.historial) - 1):
+                    self.current_historial_index = 0
+            self.data = self.historial[self.current_historial_index][:]
+        else:
+            self.current_advertencia = f"Error, la lista de comandos reutilizables esta vacia ..."
+    def removeCurrentHistorialElement(self):
+        if len(self.historial) > 0:
+            self.historial.pop(self.current_historial_index)
+            if self.current_historial_index == len(self.historial):
+                self.current_historial_index -= 1
+        else:
+            self.current_advertencia = "Error, no hay comandos en el historial para eliminar ... "
+        if len(self.historial) > 0:
+            self.data = self.historial[self.current_historial_index][:]
+        else:
+            self.reset()
+
+ANIMATION_DATA = {
+        "animation path"    : "test/megaman/shooting_running_right/",
+        "size"              : [130,100],
+        "has_alpha_pixels"  : True,
+        "colorkey"          : None,
+        "fps"               : 6,
+        "background color"  : (0,0,0)}
+
+argvTesting(argv)
+WINDOW_SIZE                     =   [1000, 800]
+WINDOW                          =   pygame.display.set_mode(WINDOW_SIZE, RESIZABLE)
+EXIT                            =   False
+CLOCK                           =   pygame.time.Clock()
+ANIMATION_MANAGER               =   AnimationManager(ANIMATION_DATA)
+InputManager_                   =   InputManager()
+COMMAND_WORD                    =   "cambiar "
+HISTORIAL_COMMANDS              =   {"right" : K_DOWN, "left" : K_UP, "remove" : K_DELETE} # right para aumentar el indice y left para disminuirlo
+COMMAND_KEYS                    =   [K_DOWN, K_UP, K_DELETE, K_RETURN, K_BACKSPACE]
+
+refreshTerminalData(COMMAND_WORD, ANIMATION_DATA, InputManager_)
 
 while not EXIT:
     WINDOW.fill(ANIMATION_DATA["background color"])
-    WINDOW.blit(ANIMATION_LIST[CURRENT_INDEX], [WINDOW_SIZE[0]//2 - ANIMATION_DATA["size"][0]//2, WINDOW_SIZE[1]//2 - ANIMATION_DATA["size"][1]//2] )
+    WINDOW.blit(ANIMATION_MANAGER.currentSprite(), [WINDOW_SIZE[0]//2 - ANIMATION_DATA["size"][0]//2, WINDOW_SIZE[1]//2 - ANIMATION_DATA["size"][1]//2] )
 
     # actualizacion de animacion
-    if CURRENT_FRAME == ANIMATION_DATA["fps"]:
-        CURRENT_FRAME = 0
-        CURRENT_INDEX += 1
-        if CURRENT_INDEX > len(ANIMATION_LIST)-1:
-            CURRENT_INDEX  = 0
-    else:
-        CURRENT_FRAME += 1
+    ANIMATION_MANAGER.update()
 
     # administracion de eventos
     for event in pygame.event.get():
-        if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
+        if (event.type == QUIT) or (event.type == KEYDOWN and event.key == K_ESCAPE):
             EXIT = True
+        if (event.type == KEYDOWN or event.type == KEYUP) and (event.key == K_BACKSPACE):
+            InputManager_.backspace_pressed = (event.type == KEYDOWN)
         if event.type == KEYDOWN:
-            if  event.key not in [K_BACKSPACE, K_RETURN, HISTORIAL_COMMANDS["right"], HISTORIAL_COMMANDS["left"], HISTORIAL_COMMANDS["remove"]]:
-                INPUT += (event.unicode)
-                refreshTerminalData(COMMAND_WORD, ANIMATION_DATA, INPUT, CURRENT_ADVERTENCIA, CHANGING_FEATURE, LAST_INPUT, CURRENT_REUSE_COMMAND_INDEX)
-            elif (event.key == K_BACKSPACE) and (len(INPUT) > 0):
-                BACKSPACE_PRESSED = True
+            if  event.key not in COMMAND_KEYS:
+                InputManager_.add(event.unicode)
+                refreshTerminalData(COMMAND_WORD, ANIMATION_DATA, InputManager_)
             elif (event.key == K_RETURN):
-                if CHANGING_FEATURE == None:
-                    feature = isCommand(INPUT, COMMAND_WORD, ANIMATION_DATA)
-                    if feature != False:
-                        CHANGING_FEATURE = feature
-                    else:
-                        CURRENT_ADVERTENCIA = f"Error, comando invalido. Revisar guia"
-                else:
-                    if   CHANGING_FEATURE == "animation path":
-                        if isAnimationPath(INPUT):
-                            ANIMATION_DATA["animation path"] = INPUT
-                            ANIMATION_LIST = getAnimationSprites(ANIMATION_DATA)
-                            CURRENT_FRAME = 0
-                            CURRENT_INDEX = 0
-                            CURRENT_ADVERTENCIA = "Exito !"
-                        else:
-                            CURRENT_ADVERTENCIA = f"Error, el animation path debe ser un directorio en el que todos los elementos sean archivos con extension '.jpg' o '.png' ..." 
-                    elif CHANGING_FEATURE == "size":
-                        new_size = numberList(",", INPUT, 2)
-                        if new_size == False:                          
-                            CURRENT_ADVERTENCIA = f"Error, el valor '{INPUT}' para la caracteristica 'size' es invalido. El formato debe ser: x,y"
-                        else:
-                            ANIMATION_DATA["size"]  = new_size
-                            ANIMATION_LIST          = getAnimationSprites(ANIMATION_DATA)
-                            CURRENT_FRAME           = 0
-                            CURRENT_INDEX           = 0
-                            CURRENT_ADVERTENCIA     = "Exito !"
-                    elif CHANGING_FEATURE == "colorkey":
-                        new_colorkey = numberList(",", INPUT, 3)
-                        if new_colorkey == False:                          
-                            if INPUT == "None":
-                                ANIMATION_DATA["colorkey"]  = None
-                                ANIMATION_DATA["has_alpha_pixels"]  = True
-                                ANIMATION_LIST          = getAnimationSprites(ANIMATION_DATA)
-                                CURRENT_FRAME           = 0
-                                CURRENT_INDEX           = 0
-                                CURRENT_ADVERTENCIA     = "Exito !"
-                            else:
-                                CURRENT_ADVERTENCIA = f"Error, el valor '{INPUT}' para la caracteristica 'colorkey' es invalido. El formato debe ser: x,y,z. Tambien puede usarse el valor 'None'"
-                        else:
-                            ANIMATION_DATA["colorkey"]  = new_colorkey
-                            ANIMATION_DATA["has_alpha_pixels"]  = False
-                            ANIMATION_LIST          = getAnimationSprites(ANIMATION_DATA)
-                            CURRENT_FRAME           = 0
-                            CURRENT_INDEX           = 0
-                            CURRENT_ADVERTENCIA     = "Exito !"
-                    elif CHANGING_FEATURE == "fps":
-                        new_fps = None
-                        try:
-                            new_fps = int(INPUT)
-                        except:
-                            CURRENT_ADVERTENCIA = f"Error, el valor para fps '{INPUT}' es invalido. El valor debe ser numerico ..."
-                        else:
-                            ANIMATION_DATA["fps"] = new_fps
-                            CURRENT_FRAME = 0
-                            CURRENT_INDEX = 0
-                            CURRENT_ADVERTENCIA     = "Exito !"
-                    elif CHANGING_FEATURE == "background color":
-                        new_bc = numberList(",", INPUT, 3)
-                        if new_bc == False:
-                            CURRENT_ADVERTENCIA = f"Error, el valor '{INPUT}' para la caracteristica 'background color' es invalido. El formato debe ser: x,y,z"
-                        else:
-                            ANIMATION_DATA["background color"]  = new_bc
-                            CURRENT_ADVERTENCIA     = "Exito !"
-
-                    CHANGING_FEATURE = None
-                if not INPUT in LAST_INPUT:
-                    LAST_INPUT.append(INPUT[:])
-                INPUT = ""
-                refreshTerminalData(COMMAND_WORD, ANIMATION_DATA, INPUT, CURRENT_ADVERTENCIA, CHANGING_FEATURE, LAST_INPUT, CURRENT_REUSE_COMMAND_INDEX)
+                InputManager_.enter(COMMAND_WORD, ANIMATION_DATA, ANIMATION_MANAGER)
+                refreshTerminalData(COMMAND_WORD, ANIMATION_DATA, InputManager_)
             elif (event.key == HISTORIAL_COMMANDS["right"]) or (event.key == HISTORIAL_COMMANDS["left"]):
-                if len(LAST_INPUT) > 0:
-                    direction = "right" if event.key == HISTORIAL_COMMANDS["right"] else "left"
-                    CURRENT_REUSE_COMMAND_INDEX = moveCurrentHistorialElement(LAST_INPUT, CURRENT_REUSE_COMMAND_INDEX, direction)
-                    INPUT = LAST_INPUT[CURRENT_REUSE_COMMAND_INDEX][:]
-                    refreshTerminalData(COMMAND_WORD, ANIMATION_DATA, INPUT, CURRENT_ADVERTENCIA, CHANGING_FEATURE, LAST_INPUT, CURRENT_REUSE_COMMAND_INDEX)
-                else:
-                    CURRENT_ADVERTENCIA = f"Error, la lista de comandos reutilizables esta vacia ..."
+                InputManager_.updateHistorial("right" if event.key == HISTORIAL_COMMANDS["right"] else "left")
+                refreshTerminalData(COMMAND_WORD, ANIMATION_DATA, InputManager_)
             elif (event.key == HISTORIAL_COMMANDS["remove"]):
-                if len(LAST_INPUT) > 0:
-                    LAST_INPUT.pop(CURRENT_REUSE_COMMAND_INDEX)
-                    if CURRENT_REUSE_COMMAND_INDEX == len(LAST_INPUT):
-                        CURRENT_REUSE_COMMAND_INDEX -= 1
-                else:
-                    CURRENT_ADVERTENCIA = "Error, no hay comandos en el historial para eliminar ... "
-                if len(LAST_INPUT) > 0:
-                    INPUT = LAST_INPUT[CURRENT_REUSE_COMMAND_INDEX][:]
-                else:
-                    INPUT = ""
-                refreshTerminalData(COMMAND_WORD, ANIMATION_DATA, INPUT, CURRENT_ADVERTENCIA, CHANGING_FEATURE, LAST_INPUT, CURRENT_REUSE_COMMAND_INDEX)
-        if event.type == KEYUP and event.key == K_BACKSPACE:
-            BACKSPACE_PRESSED = False
+                InputManager_.removeCurrentHistorialElement()
+                refreshTerminalData(COMMAND_WORD, ANIMATION_DATA, InputManager_)
         if event.type == WINDOWRESIZED:
             WINDOW_SIZE = [event.x, event.y]
 
-
-    # actualizacion de informacion de backspace
-    if BACKSPACE_PRESSED:
-        if CURRENT_BACKSPACE_FRAME == BACKSPACE_FPS:
-            CURRENT_BACKSPACE_FRAME = 0
-            INPUT = INPUT[0:len(INPUT)-1]
-            refreshTerminalData(COMMAND_WORD, ANIMATION_DATA, INPUT, CURRENT_ADVERTENCIA, CHANGING_FEATURE, LAST_INPUT, CURRENT_REUSE_COMMAND_INDEX)
-
-        else:
-            CURRENT_BACKSPACE_FRAME += 1
-    else:
-        CURRENT_BACKSPACE_FRAME = BACKSPACE_FPS
-
-
+    if InputManager_.updateBackspace():
+        refreshTerminalData(COMMAND_WORD, ANIMATION_DATA, InputManager_)
 
 
     pygame.display.update()
