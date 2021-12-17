@@ -350,11 +350,11 @@ class InputManager:
 
 ANIMATION_DATA = {
         "animation_path"    : "test/megaman/shooting_running_right/",
-        "size"              : [130,100],
+        "size"              : [130,200],
         "has_alpha_pixels"  : True,
         "colorkey"          : None,
         "fps"               : 6,
-        "background_color"  : (0,0,0)}
+        "background_color"  : (100,100,100)}
 
 argvTesting(argv)
 WINDOW_SIZE                     =   [1000, 800]
